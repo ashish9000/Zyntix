@@ -1,0 +1,2105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zyntix — Mini-Apps & Utility Tools</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CDN — config defined AFTER this loads -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // This runs after Tailwind CDN loads — correct pattern
+    if (typeof tailwind !== 'undefined') {
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              display: ['Orbitron', 'sans-serif'],
+              body:    ['DM Sans', 'sans-serif'],
+              mono:    ['JetBrains Mono', 'monospace'],
+            }
+          }
+        }
+      };
+    }
+
+  <!-- FIREBASE v10 -->
+  <!-- Firebase v10 CDN — compat mode (works on all browsers including Android Chrome local files) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    // ══════════════════════════════════════════════
+    // STEP 1 — PASTE YOUR FIREBASE CONFIG HERE
+    // Firebase Console → Project Settings → Your apps
+    // ══════════════════════════════════════════════
+    const FIREBASE_CONFIG = {
+      apiKey:            "YOUR_API_KEY",
+      authDomain:        "YOUR_PROJECT.firebaseapp.com",
+      projectId:         "YOUR_PROJECT_ID",
+      storageBucket:     "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId:             "YOUR_APP_ID"
+    };
+    // ══════════════════════════════════════════════
+    // STEP 2 — Firestore collection "apps" auto-created
+    // on first addApp(). Fields per doc:
+    // name, shortDesc, fullDesc, category, redirectUrl,
+    // thumbnail, screenshots (array), status, clickCount, createdAt
+    // STEP 3 — Collection "pages" for Privacy Policy etc.
+    // Fields: slug, title, blocks (array), updatedAt
+    // ══════════════════════════════════════════════
+
+    // Init Firebase (compat SDK — no import needed)
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const db   = firebase.firestore();
+    const COL  = "apps";
+    const PCOL = "pages";
+
+    // ── APPS CRUD ────────────────────────────────
+    async function fetchApps() {
+      const snap = await db.collection(COL).orderBy("createdAt", "desc").get();
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+    async function addApp(data) {
+      return db.collection(COL).add({
+        ...data,
+        clickCount: 0,
+        createdAt:  firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    async function updateApp(id, data) {
+      return db.collection(COL).doc(id).update(data);
+    }
+    async function deleteApp(id) {
+      return db.collection(COL).doc(id).delete();
+    }
+    async function incrementClickCount(id) {
+      return db.collection(COL).doc(id).update({
+        clickCount: firebase.firestore.FieldValue.increment(1)
+      });
+    }
+
+    // ── PAGES CRUD ───────────────────────────────
+    async function fetchPages() {
+      const snap = await db.collection(PCOL).get();
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+    async function savePage(slug, data) {
+      return db.collection(PCOL).doc(slug).set(
+        { ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    }
+    async function deletePage(slug) {
+      return db.collection(PCOL).doc(slug).delete();
+    }
+
+    window.ZyntixDB = {
+      fetchApps, addApp, updateApp, deleteApp, incrementClickCount,
+      fetchPages, savePage, deletePage
+    };
+    window.dispatchEvent(new Event("firebase-ready"));
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --orange:      #ff6b1a;
+      --orange-deep: #e85500;
+      --orange-glow: rgba(255,107,26,0.35);
+      --amber:       #ffb347;
+      --amber-glow:  rgba(255,179,71,0.3);
+      --dark:        #0c0a08;
+      --dark2:       #120f0b;
+      --card:        #1a1410;
+      --border:      #2a2018;
+      --text:        #f0e8df;
+      --muted:       #8a7a6a;
+      --dimmer:      #4a3a2a;
+    }
+
+    body {
+      background-color: var(--dark);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* ── Grid BG ── */
+    .grid-bg {
+      background-image:
+        linear-gradient(rgba(255,107,26,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,107,26,0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .dot-grid {
+      background-image: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--dark2); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Glow text ── */
+    .glow-orange { text-shadow: 0 0 24px rgba(255,107,26,0.9), 0 0 48px rgba(255,107,26,0.4); }
+    .glow-amber  { text-shadow: 0 0 24px rgba(255,179,71,0.9), 0 0 48px rgba(255,179,71,0.4); }
+
+    /* ── Navbar ── */
+    .navbar {
+      background: rgba(12,10,8,0.93);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      height: 54px;
+    }
+    .navbar-inner {
+      max-width: 1100px; margin: 0 auto;
+      padding: 0 16px; height: 100%;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+    .nav-logo img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
+    .nav-logo-text {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.85rem; font-weight: 800;
+      letter-spacing: 0.12em; color: #fff;
+    }
+    .nav-home-btn {
+      font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
+      color: var(--muted); background: none; border: none; cursor: pointer;
+      padding: 6px 12px; border-radius: 8px; transition: color .2s, background .2s;
+    }
+    .nav-home-btn:hover { color: var(--orange); background: rgba(255,107,26,0.07); }
+
+    /* ── Neon card (orange theme) ── */
+    .neon-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      position: relative; overflow: hidden;
+      transition: border-color .25s, box-shadow .25s, transform .25s;
+    }
+    .neon-card::before {
+      content: '';
+      position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(135deg, rgba(255,107,26,0.04), transparent 60%);
+    }
+    .neon-card:hover {
+      border-color: rgba(255,107,26,0.35);
+      box-shadow: 0 0 28px rgba(255,107,26,0.12), 0 8px 32px rgba(0,0,0,0.6);
+      transform: translateY(-3px);
+    }
+
+    /* ── Buttons ── */
+    .btn-orange {
+      background: rgba(255,107,26,0.1);
+      border: 1px solid rgba(255,107,26,0.4);
+      color: var(--orange);
+      font-family: 'Orbitron', sans-serif; font-size: 0.65rem;
+      letter-spacing: 0.08em; border-radius: 8px;
+      padding: 9px 18px; cursor: pointer;
+      transition: all .22s; display: inline-block;
+    }
+    .btn-orange:hover {
+      background: rgba(255,107,26,0.2); border-color: var(--orange);
+      box-shadow: 0 0 18px rgba(255,107,26,0.3); color: #fff;
+    }
+    .btn-orange-solid {
+      background: linear-gradient(135deg, var(--orange), var(--orange-deep));
+      border: none; color: #fff;
+      font-family: 'Orbitron', sans-serif; font-size: 0.72rem;
+      letter-spacing: 0.1em; border-radius: 8px;
+      padding: 12px 28px; cursor: pointer;
+      transition: all .22s;
+      box-shadow: 0 0 20px rgba(255,107,26,0.3);
+    }
+    .btn-orange-solid:hover {
+      box-shadow: 0 0 34px rgba(255,107,26,0.5), 0 4px 20px rgba(232,85,0,0.3);
+      transform: translateY(-2px);
+    }
+    .btn-danger {
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.35);
+      color: #f87171; font-size: 0.75rem; border-radius: 6px;
+      padding: 6px 13px; cursor: pointer; transition: all .2s;
+    }
+    .btn-danger:hover { background: rgba(239,68,68,0.22); border-color: #ef4444; }
+    .btn-edit {
+      background: rgba(255,107,26,0.1); border: 1px solid rgba(255,107,26,0.35);
+      color: var(--amber); font-size: 0.75rem; border-radius: 6px;
+      padding: 6px 13px; cursor: pointer; transition: all .2s;
+    }
+    .btn-edit:hover { background: rgba(255,107,26,0.22); border-color: var(--orange); }
+
+    /* ── Category pills ── */
+    .cat-pill {
+      font-size: 0.62rem; font-family: 'JetBrains Mono', monospace;
+      padding: 3px 9px; border-radius: 99px; border: 1px solid;
+      display: inline-block;
+    }
+    .cat-ai       { color: #00d4ff; border-color: rgba(0,212,255,.35); background: rgba(0,212,255,.07); }
+    .cat-utility  { color: #10b981; border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.07); }
+    .cat-game     { color: #ec4899; border-color: rgba(236,72,153,.35); background: rgba(236,72,153,.07); }
+    .cat-prod     { color: var(--amber); border-color: rgba(255,179,71,.35); background: rgba(255,179,71,.07); }
+    .cat-other    { color: #a78bfa; border-color: rgba(167,139,250,.35); background: rgba(167,139,250,.07); }
+
+    /* ── Status badges ── */
+    .badge-live, .badge-beta, .badge-coming {
+      font-size: 0.62rem; font-family: 'JetBrains Mono', monospace;
+      padding: 2px 9px; border-radius: 99px; border: 1px solid; display: inline-block;
+    }
+    .badge-live   { color: #10b981; background: rgba(16,185,129,.12); border-color: rgba(16,185,129,.4); }
+    .badge-beta   { color: var(--amber); background: rgba(255,179,71,.1); border-color: rgba(255,179,71,.4); }
+    .badge-coming { color: #a78bfa; background: rgba(167,139,250,.1); border-color: rgba(167,139,250,.4); }
+
+    /* ── Inputs ── */
+    .z-input {
+      background: var(--dark2); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); padding: 10px 14px;
+      font-family: 'DM Sans', sans-serif; font-size: 0.875rem; width: 100%;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .z-input:focus {
+      outline: none; border-color: rgba(255,107,26,.45);
+      box-shadow: 0 0 0 3px rgba(255,107,26,.08);
+    }
+    .z-input::placeholder { color: var(--dimmer); }
+    select.z-input option { background: var(--card); }
+    .z-label {
+      display: block; font-size: 0.7rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--muted); margin-bottom: 5px; letter-spacing: 0.05em;
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 34px; height: 34px;
+      border: 3px solid var(--border); border-top-color: var(--orange);
+      border-radius: 50%; animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Scan line ── */
+    .scan-line {
+      position: absolute; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,107,26,0.55), transparent);
+      animation: scanMove 7s linear infinite; pointer-events: none;
+    }
+    @keyframes scanMove {
+      0%   { top: -2px; opacity: 0; }
+      5%   { opacity: 1; }
+      95%  { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    /* ── Filter chips ── */
+    .filter-chip {
+      background: var(--card); border: 1px solid var(--border); border-radius: 99px;
+      padding: 6px 16px; font-size: 0.72rem;
+      font-family: 'JetBrains Mono', monospace; color: var(--muted);
+      cursor: pointer; transition: all .2s; white-space: nowrap; flex-shrink: 0;
+    }
+    .filter-chip:hover, .filter-chip.active {
+      border-color: var(--orange); color: var(--orange);
+      background: rgba(255,107,26,.07);
+    }
+
+    /* ── Carousel ── */
+    .carousel-track { display: flex; transition: transform .4s cubic-bezier(.25,.8,.25,1); will-change: transform; }
+    .carousel-slide { flex-shrink: 0; width: 100%; }
+
+    /* ── Views ── */
+    .view { display: none; }
+    .view.active { display: block; animation: fadeUp .3s ease forwards; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+    /* ── Admin table ── */
+    .admin-table { width: 100%; border-collapse: separate; border-spacing: 0 5px; }
+    .admin-table thead th {
+      color: var(--dimmer); font-size: 0.68rem; font-family: 'JetBrains Mono', monospace;
+      text-transform: uppercase; letter-spacing: .06em; padding: 6px 12px; text-align: left;
+    }
+    .admin-table tbody tr td {
+      padding: 11px 12px; font-size: 0.82rem; background: var(--card);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    }
+    .admin-table tbody tr td:first-child { border-left: 1px solid var(--border); border-radius: 8px 0 0 8px; }
+    .admin-table tbody tr td:last-child  { border-right: 1px solid var(--border); border-radius: 0 8px 8px 0; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 20px; right: 16px; z-index: 9999;
+      background: var(--card); border: 1px solid rgba(255,107,26,0.4);
+      color: var(--orange); padding: 11px 18px; border-radius: 10px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+      box-shadow: 0 0 20px rgba(255,107,26,0.15);
+      transform: translateY(90px); opacity: 0;
+      transition: all .3s cubic-bezier(.25,.8,.25,1); pointer-events: none;
+      max-width: calc(100vw - 32px);
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+
+    /* ── Admin modal ── */
+    #admin-modal {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(12,10,8,0.92); backdrop-filter: blur(10px);
+      display: none; align-items: center; justify-content: center; padding: 16px;
+    }
+    #admin-modal.open { display: flex; animation: fadeUp .25s ease; }
+    .modal-box {
+      background: var(--card); border: 1px solid rgba(255,107,26,0.35);
+      border-radius: 18px; padding: 28px 24px; width: 100%; max-width: 360px;
+      box-shadow: 0 0 48px rgba(255,107,26,0.15);
+    }
+
+    /* ── Hero stat pill ── */
+    .stat-pill {
+      background: rgba(255,107,26,0.07);
+      border: 1px solid rgba(255,107,26,0.2);
+      border-radius: 12px; padding: 14px 20px; text-align: center;
+    }
+
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%,60%  { transform: translateX(-8px); }
+      40%,80%  { transform: translateX(8px); }
+    }
+    @media (max-width: 480px) { .hero-h1 { font-size: 1.9rem !important; } }
+
+    /* ══════════════════════════════════════════
+       RICH CONTENT BUILDER
+    ══════════════════════════════════════════ */
+
+    /* Tab switcher */
+    .admin-tab {
+      font-family: 'JetBrains Mono', monospace; font-size: .7rem;
+      letter-spacing: .06em; padding: 8px 18px; border-radius: 8px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--muted); cursor: pointer; transition: all .2s;
+    }
+    .admin-tab.active {
+      background: rgba(255,107,26,.12); border-color: var(--orange);
+      color: var(--orange);
+    }
+
+    /* Block type picker buttons */
+    .block-type-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      background: var(--dark2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 8px; cursor: pointer; transition: all .2s; min-width: 64px;
+    }
+    .block-type-btn:hover, .block-type-btn.sel {
+      border-color: var(--orange); background: rgba(255,107,26,.07);
+    }
+    .block-type-btn .icon { font-size: 1.2rem; line-height: 1; }
+    .block-type-btn .lbl { font-family:'JetBrains Mono',monospace; font-size:.58rem; color:var(--muted); letter-spacing:.04em; }
+    .block-type-btn.sel .lbl { color: var(--orange); }
+
+    /* Block items in builder list */
+    .rcb-block {
+      background: var(--dark2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px;
+      display: flex; align-items: flex-start; gap: 10px;
+      transition: border-color .2s;
+    }
+    .rcb-block:hover { border-color: rgba(255,107,26,.25); }
+    .rcb-block-icon { font-size: 1rem; flex-shrink: 0; margin-top: 2px; }
+    .rcb-block-body { flex: 1; min-width: 0; }
+    .rcb-block-label {
+      font-family: 'JetBrains Mono', monospace; font-size: .6rem;
+      color: var(--orange); letter-spacing: .06em; margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .rcb-block-preview {
+      font-size: .78rem; color: var(--muted); line-height: 1.4;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+    }
+    .rcb-block-actions { display: flex; gap: 5px; flex-shrink: 0; }
+    .rcb-btn {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); font-size: .7rem; padding: 4px 8px; cursor: pointer;
+      transition: all .2s; white-space: nowrap;
+    }
+    .rcb-btn:hover { border-color: var(--orange); color: var(--orange); }
+    .rcb-btn.del:hover { border-color: #ef4444; color: #f87171; }
+    .rcb-btn.up:hover, .rcb-btn.dn:hover { background: rgba(255,107,26,.08); }
+
+    /* Section block indent */
+    .rcb-section-inner {
+      margin-left: 12px; margin-top: 8px;
+      border-left: 2px solid rgba(255,107,26,.2);
+      padding-left: 10px; display: flex; flex-direction: column; gap: 6px;
+    }
+
+    /* Block edit mini-modal */
+    #block-edit-modal {
+      position: fixed; inset: 0; z-index: 600;
+      background: rgba(12,10,8,0.93); backdrop-filter: blur(10px);
+      display: none; align-items: center; justify-content: center; padding: 16px;
+    }
+    #block-edit-modal.open { display: flex; animation: fadeUp .2s ease; }
+    .bem-box {
+      background: var(--card); border: 1px solid rgba(255,107,26,.3);
+      border-radius: 16px; padding: 22px 20px; width: 100%; max-width: 440px;
+      max-height: 85vh; overflow-y: auto;
+      box-shadow: 0 0 40px rgba(255,107,26,.12);
+    }
+    .bem-title {
+      font-family: 'JetBrains Mono', monospace; font-size: .72rem;
+      color: var(--orange); letter-spacing: .1em; margin-bottom: 16px;
+    }
+
+    /* Rich content rendered on detail page */
+    .rc-section {
+      background: var(--dark2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px; margin-bottom: 14px;
+    }
+    .rc-section-title {
+      font-family: 'Orbitron', sans-serif; font-size: .82rem; font-weight: 700;
+      color: var(--orange); margin-bottom: 12px; padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .rc-heading {
+      font-family: 'Orbitron', sans-serif; font-size: .9rem; font-weight: 700;
+      color: #fff; margin: 10px 0 6px;
+    }
+    .rc-para {
+      font-size: .875rem; color: #d1c8be; line-height: 1.8; margin-bottom: 10px;
+    }
+    .rc-img {
+      width: 100%; border-radius: 10px; object-fit: cover;
+      margin: 8px 0; display: block;
+      border: 1px solid var(--border);
+    }
+    .rc-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--orange); font-size: .85rem;
+      border-bottom: 1px solid rgba(255,107,26,.3);
+      text-decoration: none; transition: color .2s;
+      word-break: break-all;
+    }
+    .rc-link:hover { color: var(--amber); border-color: var(--amber); }
+    .rc-link-img {
+      display: block; width: 100%; border-radius: 10px;
+      border: 2px solid rgba(255,107,26,.3); margin: 8px 0;
+      cursor: pointer; transition: border-color .2s, box-shadow .2s;
+    }
+    .rc-link-img:hover { border-color: var(--orange); box-shadow: 0 0 16px rgba(255,107,26,.2); }
+  </style>
+</head>
+<body class="grid-bg">
+
+  <div id="toast"></div>
+
+  <!-- ════════ ADMIN PASSWORD MODAL ════════ -->
+  <div id="admin-modal" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+        <img src="data:image/png;base64,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" onerror="this.style.display='none'"
+          style="width:38px;height:38px;border-radius:9px;object-fit:cover;flex-shrink:0;" />
+        <div>
+          <p style="font-family:'Orbitron',sans-serif;font-size:.8rem;color:#fff;font-weight:700;letter-spacing:.08em;">ADMIN ACCESS</p>
+          <p style="font-size:.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace;">Zyntix Control Panel</p>
+        </div>
+      </div>
+      <label class="z-label" for="admin-pw-input">PASSWORD</label>
+      <input id="admin-pw-input" type="password" class="z-input"
+        placeholder="Enter admin password..."
+        onkeydown="if(event.key==='Enter') verifyAdminPassword()"
+        style="margin-bottom:8px;" />
+      <p id="admin-pw-error" style="color:#f87171;font-size:.72rem;font-family:'JetBrains Mono',monospace;min-height:18px;margin-bottom:14px;"></p>
+      <div style="display:flex;gap:10px;">
+        <button onclick="verifyAdminPassword()" class="btn-orange-solid" style="flex:1;padding:10px 16px;">UNLOCK</button>
+        <button onclick="closeAdminModal()" class="btn-orange" style="padding:10px 16px;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ BLOCK EDIT MODAL ════════ -->
+  <div id="block-edit-modal" role="dialog" aria-modal="true">
+    <div class="bem-box">
+      <p id="bem-title" class="bem-title">EDIT BLOCK</p>
+
+      <!-- Heading -->
+      <div id="bem-heading" style="display:none;">
+        <label class="z-label">Heading Text</label>
+        <input id="bem-heading-text" class="z-input" placeholder="Section heading..." />
+      </div>
+      <!-- Paragraph -->
+      <div id="bem-para" style="display:none;">
+        <label class="z-label">Paragraph / Story Text</label>
+        <textarea id="bem-para-text" class="z-input" rows="6" placeholder="Write your story, description, or any text here..." style="resize:vertical;"></textarea>
+      </div>
+      <!-- Image -->
+      <div id="bem-img" style="display:none;">
+        <label class="z-label">Image URL</label>
+        <input id="bem-img-url" class="z-input" placeholder="https://example.com/image.jpg" style="margin-bottom:10px;"
+          oninput="previewBemImg(this.value,'bem-img-preview','bem-img-preview-img')" />
+        <label class="z-label">Caption (optional)</label>
+        <input id="bem-img-caption" class="z-input" placeholder="Image caption..." />
+        <div id="bem-img-preview" style="margin-top:10px;display:none;">
+          <img id="bem-img-preview-img" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:150px;object-fit:cover;" />
+        </div>
+      </div>
+      <!-- Link -->
+      <div id="bem-link" style="display:none;">
+        <label class="z-label">Link Label / Text</label>
+        <input id="bem-link-label" class="z-input" placeholder="Click here to visit..." style="margin-bottom:10px;" />
+        <label class="z-label">URL</label>
+        <input id="bem-link-url" class="z-input" placeholder="https://..." />
+      </div>
+      <!-- Clickable Image -->
+      <div id="bem-linkimg" style="display:none;">
+        <label class="z-label">Image URL</label>
+        <input id="bem-linkimg-img" class="z-input" placeholder="https://example.com/image.jpg" style="margin-bottom:10px;"
+          oninput="previewBemImg(this.value,'bem-linkimg-preview','bem-linkimg-preview-img')" />
+        <label class="z-label">Redirect URL (clicking opens this)</label>
+        <input id="bem-linkimg-url" class="z-input" placeholder="https://..." style="margin-bottom:10px;" />
+        <label class="z-label">Alt Text / Caption (optional)</label>
+        <input id="bem-linkimg-alt" class="z-input" placeholder="Image description..." />
+        <div id="bem-linkimg-preview" style="margin-top:10px;display:none;">
+          <img id="bem-linkimg-preview-img" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:130px;object-fit:cover;" />
+        </div>
+      </div>
+      <!-- Section -->
+      <div id="bem-section" style="display:none;">
+        <label class="z-label">Section Title</label>
+        <input id="bem-section-title" class="z-input" placeholder="e.g. Features, How it works..." />
+        <p style="font-size:.72rem;color:var(--muted);margin-top:8px;font-family:'JetBrains Mono',monospace;">
+          After saving, open this section to add sub-blocks inside it.
+        </p>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:18px;">
+        <button onclick="saveBlockEdit()" class="btn-orange-solid" style="flex:1;padding:10px;">SAVE BLOCK</button>
+        <button onclick="closeBlockEdit()" class="btn-orange" style="padding:10px 16px;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ NAVBAR ════════ -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <div class="nav-logo" onclick="navigate('home')">
+        <!-- Logo image — update src to a hosted URL after deployment -->
+        <img src="data:image/png;base64,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"
+             onerror="this.outerHTML='<div style=\'width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#ff6b1a,#e85500);display:flex;align-items:center;justify-content:center;font-family:Orbitron,sans-serif;font-weight:900;color:#fff;font-size:.75rem;\'>Z</div>'"
+             alt="Zyntix" style="width:32px;height:32px;border-radius:8px;object-fit:cover;" />
+        <span class="nav-logo-text">ZYNTIX</span>
+      </div>
+      <button class="nav-home-btn" onclick="navigate('home')">Home</button>
+    </div>
+  </nav>
+
+  <!-- ════════ MAIN ════════ -->
+  <main style="padding-top:54px;">
+
+    <!-- ─── HOME VIEW ─── -->
+    <div id="view-home" class="view">
+
+      <!-- HERO -->
+      <section class="dot-grid" style="position:relative;overflow:hidden;padding:72px 16px 64px;">
+        <div class="scan-line"></div>
+
+        <!-- Glow orbs -->
+        <div style="position:absolute;top:-80px;left:5%;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle,rgba(255,107,26,0.09),transparent 70%);filter:blur(50px);pointer-events:none;"></div>
+        <div style="position:absolute;bottom:-60px;right:5%;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(255,179,71,0.07),transparent 70%);filter:blur(40px);pointer-events:none;"></div>
+
+        <div style="max-width:720px;margin:0 auto;text-align:center;position:relative;z-index:1;">
+
+          <!-- Logo lockup -->
+          <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:24px;">
+            <img src="data:image/png;base64,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"
+                 onerror="this.style.display='none'"
+                 alt="Zyntix"
+                 style="width:64px;height:64px;border-radius:16px;object-fit:cover;box-shadow:0 0 32px rgba(255,107,26,0.4);" />
+          </div>
+
+          <!-- Eyebrow -->
+          <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,107,26,0.07);border:1px solid rgba(255,107,26,0.2);border-radius:99px;padding:5px 16px;margin-bottom:18px;">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--orange);display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:.66rem;color:var(--orange);letter-spacing:.12em;">MINI-APPS &amp; UTILITY TOOLS</span>
+          </div>
+
+          <!-- Headline -->
+          <h1 class="hero-h1" style="font-family:'Orbitron',sans-serif;font-weight:900;font-size:2.7rem;line-height:1.1;color:#fff;margin-bottom:6px;">
+            YOUR DAILY TOOLS,
+          </h1>
+          <h1 class="hero-h1" style="font-family:'Orbitron',sans-serif;font-weight:900;font-size:2.7rem;line-height:1.1;margin-bottom:20px;">
+            <span class="glow-orange" style="color:var(--orange);">SUPERCHARGED.</span>
+          </h1>
+
+          <!-- Sub-headline -->
+          <p style="color:var(--muted);font-size:.95rem;line-height:1.75;margin-bottom:14px;max-width:520px;margin-left:auto;margin-right:auto;">
+            Zyntix crafts <strong style="color:var(--text);">fast, focused mini-apps</strong> — calculators, converters, games, AI tools, and productivity utilities — built for everyday users who want powerful tools without the bloat.
+          </p>
+          <p style="color:var(--dimmer);font-size:.82rem;line-height:1.65;margin-bottom:36px;max-width:460px;margin-left:auto;margin-right:auto;">
+            Every app is lightweight, mobile-first, and free to use. Browse the full collection below.
+          </p>
+
+          <!-- Stats row -->
+          <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-bottom:36px;">
+            <div class="stat-pill">
+              <p style="font-family:'Orbitron',sans-serif;font-size:1.3rem;font-weight:700;color:var(--orange);" id="stat-count">—</p>
+              <p style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--muted);letter-spacing:.06em;margin-top:2px;">APPS LIVE</p>
+            </div>
+            <div class="stat-pill">
+              <p style="font-family:'Orbitron',sans-serif;font-size:1.3rem;font-weight:700;color:var(--amber);" id="stat-installs">—</p>
+              <p style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--muted);letter-spacing:.06em;margin-top:2px;">TOTAL INSTALLS</p>
+            </div>
+            <div class="stat-pill">
+              <p style="font-family:'Orbitron',sans-serif;font-size:1.3rem;font-weight:700;color:#10b981;">FREE</p>
+              <p style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--muted);letter-spacing:.06em;margin-top:2px;">ALWAYS</p>
+            </div>
+          </div>
+
+          <!-- Search -->
+          <div style="max-width:420px;margin:0 auto;position:relative;">
+            <svg style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--muted);pointer-events:none;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input id="search-input" type="text"
+              placeholder="Search apps, tools, games..."
+              class="z-input"
+              style="padding-left:42px;border-radius:99px;"
+              oninput="onSearchInput(this.value)" />
+          </div>
+        </div>
+      </section>
+
+      <!-- DIVIDER with label -->
+      <div style="max-width:1100px;margin:0 auto;padding:0 16px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+          <div style="flex:1;height:1px;background:var(--border);"></div>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--dimmer);letter-spacing:.1em;white-space:nowrap;">BROWSE THE ECOSYSTEM</span>
+          <div style="flex:1;height:1px;background:var(--border);"></div>
+        </div>
+      </div>
+
+      <!-- CATEGORY FILTERS -->
+      <div style="max-width:1100px;margin:0 auto;padding:0 16px 10px;">
+        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+          <button class="filter-chip active" data-cat="All"          onclick="setCategory(this)">All</button>
+          <button class="filter-chip"        data-cat="AI Tools"     onclick="setCategory(this)">⚡ AI Tools</button>
+          <button class="filter-chip"        data-cat="Utilities"    onclick="setCategory(this)">🔧 Utilities</button>
+          <button class="filter-chip"        data-cat="Games"        onclick="setCategory(this)">🎮 Games</button>
+          <button class="filter-chip"        data-cat="Productivity" onclick="setCategory(this)">📊 Productivity</button>
+          <button class="filter-chip"        data-cat="Other"        onclick="setCategory(this)">✦ Other</button>
+        </div>
+      </div>
+
+      <!-- APPS GRID -->
+      <div style="max-width:1100px;margin:0 auto;padding:8px 16px 72px;">
+        <div id="apps-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 0;gap:14px;">
+          <div class="spinner"></div>
+          <p style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--dimmer);letter-spacing:.06em;">CONNECTING TO FIRESTORE...</p>
+        </div>
+        <div id="apps-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px 0;gap:10px;text-align:center;">
+          <div style="font-size:3.2rem;margin-bottom:6px;">⚡</div>
+          <p style="color:var(--text);font-family:'Orbitron',sans-serif;font-size:.8rem;">No apps found</p>
+          <p style="color:var(--muted);font-size:.8rem;">Try a different search, or check back soon.</p>
+        </div>
+        <div id="apps-grid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;"></div>
+      </div>
+
+      <!-- ABOUT STRIP -->
+      <div style="background:var(--card);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+        <div style="max-width:900px;margin:0 auto;padding:48px 24px;display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center;">
+          <div>
+            <p style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--orange);letter-spacing:.12em;margin-bottom:10px;">ABOUT ZYNTIX</p>
+            <h2 style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:1.2rem;color:#fff;line-height:1.3;margin-bottom:14px;">
+              Tools That Get<br/>Out of Your Way.
+            </h2>
+            <p style="color:var(--muted);font-size:.875rem;line-height:1.75;">
+              Zyntix is an independent studio focused on building <strong style="color:var(--text);">small, sharp, purposeful tools</strong>. No sign-ups. No subscriptions. No noise. Just apps that do exactly what they say — fast.
+            </p>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div style="background:var(--dark2);border:1px solid var(--border);border-radius:12px;padding:16px;">
+              <div style="font-size:1.4rem;margin-bottom:6px;">⚡</div>
+              <p style="font-family:'Orbitron',sans-serif;font-size:.72rem;color:#fff;font-weight:600;margin-bottom:4px;">INSTANT</p>
+              <p style="font-size:.75rem;color:var(--muted);">No installs needed. Open and use.</p>
+            </div>
+            <div style="background:var(--dark2);border:1px solid var(--border);border-radius:12px;padding:16px;">
+              <div style="font-size:1.4rem;margin-bottom:6px;">📱</div>
+              <p style="font-family:'Orbitron',sans-serif;font-size:.72rem;color:#fff;font-weight:600;margin-bottom:4px;">MOBILE FIRST</p>
+              <p style="font-size:.75rem;color:var(--muted);">Designed for phones first, always.</p>
+            </div>
+            <div style="background:var(--dark2);border:1px solid var(--border);border-radius:12px;padding:16px;">
+              <div style="font-size:1.4rem;margin-bottom:6px;">🆓</div>
+              <p style="font-family:'Orbitron',sans-serif;font-size:.72rem;color:#fff;font-weight:600;margin-bottom:4px;">FREE TO USE</p>
+              <p style="font-size:.75rem;color:var(--muted);">Every app, every feature. Free.</p>
+            </div>
+            <div style="background:var(--dark2);border:1px solid var(--border);border-radius:12px;padding:16px;">
+              <div style="font-size:1.4rem;margin-bottom:6px;">🇮🇳</div>
+              <p style="font-family:'Orbitron',sans-serif;font-size:.72rem;color:#fff;font-weight:600;margin-bottom:4px;">MADE IN INDIA</p>
+              <p style="font-size:.75rem;color:var(--muted);">Built for Indian users & beyond.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /view-home -->
+
+    <!-- ─── DETAILS VIEW ─── -->
+    <div id="view-details" class="view">
+      <div id="details-loading" style="display:flex;align-items:center;justify-content:center;padding:100px 0;">
+        <div class="spinner"></div>
+      </div>
+      <div id="details-content" style="display:none;max-width:780px;margin:0 auto;padding:24px 16px 60px;">
+        <button onclick="navigate('home')" style="display:flex;align-items:center;gap:7px;color:var(--muted);background:none;border:none;cursor:pointer;font-size:.83rem;margin-bottom:24px;transition:color .2s;" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--muted)'">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
+          Back to Ecosystem
+        </button>
+
+        <!-- App header -->
+        <div class="neon-card" style="padding:20px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;">
+          <img id="det-thumb" src="" alt="" style="width:72px;height:72px;border-radius:14px;object-fit:cover;border:1px solid var(--border);flex-shrink:0;" onerror="this.src='https://placehold.co/72x72/1a1410/ff6b1a?text=Z'" />
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;">
+              <span id="det-status"></span>
+              <span id="det-category" class="cat-pill"></span>
+            </div>
+            <h1 id="det-name" style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:1.35rem;color:#fff;margin-bottom:5px;"></h1>
+            <p id="det-shortdesc" style="color:var(--muted);font-size:.87rem;"></p>
+          </div>
+        </div>
+
+        <!-- Full desc -->
+        <div class="neon-card" style="padding:20px;margin-bottom:16px;">
+          <p style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--orange);letter-spacing:.1em;margin-bottom:10px;">ABOUT THIS APP</p>
+          <p id="det-fulldesc" style="color:#d1c8be;font-size:.875rem;line-height:1.8;"></p>
+        </div>
+
+        <!-- Screenshots -->
+        <div id="det-carousel-wrap" class="neon-card" style="display:none;padding:18px;margin-bottom:16px;">
+          <p style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--orange);letter-spacing:.1em;margin-bottom:12px;">SCREENSHOTS</p>
+          <div style="overflow:hidden;border-radius:10px;position:relative;">
+            <div id="carousel-track" class="carousel-track"></div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;">
+            <button onclick="carouselPrev()" class="btn-orange" style="padding:7px 14px;font-size:.62rem;">← Prev</button>
+            <div id="carousel-dots" style="display:flex;gap:6px;align-items:center;"></div>
+            <button onclick="carouselNext()" class="btn-orange" style="padding:7px 14px;font-size:.62rem;">Next →</button>
+          </div>
+        </div>
+
+        <!-- Stats + CTA -->
+        <div class="neon-card" style="padding:20px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;">
+          <div>
+            <p style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--muted);margin-bottom:2px;">INSTALLS / LAUNCHES</p>
+            <p id="det-clicks" style="font-family:'Orbitron',sans-serif;font-size:1.9rem;font-weight:700;color:var(--orange);">0</p>
+          </div>
+          <button id="det-cta" class="btn-orange-solid" style="width:100%;max-width:260px;">⚡ INSTALL / LAUNCH APP</button>
+        </div>
+
+        <!-- Rich Content Blocks (rendered from Firebase) -->
+        <div id="det-rich-content" style="margin-top:4px;"></div>
+      </div>
+    </div>
+
+    <!-- ─── ADMIN VIEW ─── -->
+    <div id="view-admin" class="view">
+      <div style="max-width:1000px;margin:0 auto;padding:24px 16px 60px;">
+
+        <!-- Admin header -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+          <img src="data:image/png;base64,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" onerror="this.style.display='none'"
+            style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;" />
+          <div>
+            <h1 style="font-family:'Orbitron',sans-serif;color:#fff;font-weight:700;font-size:1rem;letter-spacing:.1em;">ADMIN DASHBOARD</h1>
+            <p style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--muted);">Zyntix Ecosystem Control Panel</p>
+          </div>
+          <button onclick="navigate('home')" class="btn-orange" style="margin-left:auto;padding:7px 14px;font-size:.62rem;">← Exit</button>
+        </div>
+
+        <!-- ── TAB BAR ── -->
+        <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+          <button class="admin-tab active" id="tab-apps"    onclick="switchAdminTab('apps')">📦 MANAGE APPS</button>
+          <button class="admin-tab"        id="tab-content" onclick="switchAdminTab('content')">✏️ RICH CONTENT</button>
+          <button class="admin-tab"        id="tab-pages"   onclick="switchAdminTab('pages')">📄 PAGES</button>
+        </div>
+
+        <!-- ══════════════════════════════════════
+             TAB 1 — MANAGE APPS
+        ══════════════════════════════════════ -->
+        <div id="admin-tab-apps">
+          <!-- Add/Edit form -->
+          <div class="neon-card" style="padding:22px;margin-bottom:22px;">
+            <p id="form-title" style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--orange);letter-spacing:.1em;margin-bottom:18px;">ADD NEW APP</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+              <div>
+                <label class="z-label">App Name *</label>
+                <input id="f-name" class="z-input" placeholder="e.g. Zyntix Calculator" />
+              </div>
+              <div>
+                <label class="z-label">Category *</label>
+                <select id="f-category" class="z-input">
+                  <option value="">Select category</option>
+                  <option>AI Tools</option><option>Utilities</option>
+                  <option>Games</option><option>Productivity</option><option>Other</option>
+                </select>
+              </div>
+              <div style="grid-column:1/-1;">
+                <label class="z-label">Short Description * (max 100 chars)</label>
+                <input id="f-shortdesc" class="z-input" placeholder="One-liner that sells it..." maxlength="100" />
+              </div>
+              <div style="grid-column:1/-1;">
+                <label class="z-label">Full Detailed Description *</label>
+                <textarea id="f-fulldesc" class="z-input" rows="4" placeholder="Features, target users, use-cases..." style="resize:vertical;"></textarea>
+              </div>
+              <div>
+                <label class="z-label">Redirect URL *</label>
+                <input id="f-url" class="z-input" placeholder="https://yourdomain.com/app" />
+              </div>
+              <div>
+                <label class="z-label">Status *</label>
+                <select id="f-status" class="z-input">
+                  <option value="">Select status</option>
+                  <option>Live</option><option>Beta</option><option>Coming Soon</option>
+                </select>
+              </div>
+              <div style="grid-column:1/-1;">
+                <label class="z-label">Thumbnail Image URL</label>
+                <input id="f-thumb" class="z-input" placeholder="https://example.com/thumb.png" />
+              </div>
+              <div style="grid-column:1/-1;">
+                <label class="z-label">Screenshot URLs (comma-separated)</label>
+                <textarea id="f-screenshots" class="z-input" rows="2" placeholder="https://img1.png, https://img2.png" style="resize:vertical;"></textarea>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;">
+              <button onclick="submitAppForm()" class="btn-orange-solid">SAVE APP</button>
+              <button id="cancel-edit-btn" onclick="cancelEdit()" class="btn-orange" style="display:none;">Cancel Edit</button>
+            </div>
+          </div>
+
+          <!-- Manage table -->
+          <div class="neon-card" style="padding:22px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+              <p style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--amber);letter-spacing:.1em;">MANAGE APPS</p>
+              <button onclick="loadAdminApps()" class="btn-orange" style="padding:7px 14px;font-size:.62rem;">↻ Refresh</button>
+            </div>
+            <div id="admin-loading" style="display:flex;align-items:center;justify-content:center;padding:48px 0;">
+              <div class="spinner"></div>
+            </div>
+            <div id="admin-table-wrap" style="display:none;overflow-x:auto;">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>App</th><th>Category</th><th>Status</th>
+                    <th style="text-align:center;">Clicks</th>
+                    <th style="text-align:right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-tbody"></tbody>
+              </table>
+              <p id="admin-empty-msg" style="display:none;text-align:center;padding:36px 0;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.75rem;">No apps yet. Add your first app above ↑</p>
+            </div>
+          </div>
+        </div><!-- /tab-apps -->
+
+        <!-- ══════════════════════════════════════
+             TAB 2 — RICH CONTENT BUILDER
+        ══════════════════════════════════════ -->
+        <div id="admin-tab-content" style="display:none;">
+
+          <!-- Step 1: Pick app -->
+          <div class="neon-card" style="padding:20px;margin-bottom:16px;">
+            <p style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--orange);letter-spacing:.1em;margin-bottom:10px;">STEP 1 — SELECT APP TO EDIT CONTENT</p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <select id="rcb-app-select" class="z-input" style="flex:1;min-width:200px;" onchange="rcbSelectApp(this.value)">
+                <option value="">— Select an app —</option>
+              </select>
+              <button onclick="rcbLoadApp()" class="btn-orange" style="padding:9px 16px;font-size:.65rem;white-space:nowrap;">Load Content</button>
+            </div>
+            <p id="rcb-app-name" style="font-size:.78rem;color:var(--amber);font-family:'JetBrains Mono',monospace;margin-top:8px;display:none;"></p>
+          </div>
+
+          <!-- Builder area (shown after app selected) -->
+          <div id="rcb-builder" style="display:none;">
+
+            <!-- Step 2: Add block type picker -->
+            <div class="neon-card" style="padding:20px;margin-bottom:16px;">
+              <p style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--orange);letter-spacing:.1em;margin-bottom:12px;">STEP 2 — ADD A BLOCK</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="block-type-btn" onclick="rcbAddBlock('heading')">
+                  <span class="icon">H</span><span class="lbl">HEADING</span>
+                </button>
+                <button class="block-type-btn" onclick="rcbAddBlock('para')">
+                  <span class="icon">¶</span><span class="lbl">PARAGRAPH</span>
+                </button>
+                <button class="block-type-btn" onclick="rcbAddBlock('img')">
+                  <span class="icon">🖼</span><span class="lbl">IMAGE</span>
+                </button>
+                <button class="block-type-btn" onclick="rcbAddBlock('link')">
+                  <span class="icon">🔗</span><span class="lbl">LINK</span>
+                </button>
+                <button class="block-type-btn" onclick="rcbAddBlock('linkimg')">
+                  <span class="icon">📸</span><span class="lbl">IMG LINK</span>
+                </button>
+                <button class="block-type-btn" onclick="rcbAddBlock('section')">
+                  <span class="icon">📂</span><span class="lbl">SECTION</span>
+                </button>
+              </div>
+              <p style="font-size:.7rem;color:var(--muted);margin-top:10px;font-family:'JetBrains Mono',monospace;">
+                SECTION = container with a title. Add sub-blocks inside it using the "+" button on the section.
+              </p>
+            </div>
+
+            <!-- Step 3: Block list -->
+            <div class="neon-card" style="padding:20px;margin-bottom:16px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+                <p style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--orange);letter-spacing:.1em;">STEP 3 — CONTENT BLOCKS</p>
+                <div style="display:flex;gap:8px;">
+                  <button onclick="rcbPreviewToggle()" class="btn-orange" style="padding:6px 12px;font-size:.62rem;" id="rcb-preview-btn">👁 Preview</button>
+                  <button onclick="rcbSaveContent()" class="btn-orange-solid" style="padding:8px 16px;font-size:.65rem;">💾 SAVE TO FIREBASE</button>
+                </div>
+              </div>
+
+              <div id="rcb-empty-hint" style="text-align:center;padding:32px 0;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.72rem;">
+                No blocks yet. Add blocks above ↑
+              </div>
+              <div id="rcb-block-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+            </div>
+
+            <!-- Live Preview Panel -->
+            <div id="rcb-preview-panel" class="neon-card" style="display:none;padding:20px;margin-bottom:16px;">
+              <p style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--amber);letter-spacing:.1em;margin-bottom:14px;">LIVE PREVIEW</p>
+              <div id="rcb-preview-content"></div>
+            </div>
+
+          </div><!-- /rcb-builder -->
+        </div><!-- /tab-content -->
+
+        <!-- ══════════════════════════════════════
+             TAB 3 — PAGES MANAGER
+        ══════════════════════════════════════ -->
+        <div id="admin-tab-pages" style="display:none;">
+
+          <!-- Info banner -->
+          <div style="background:rgba(255,107,26,0.06);border:1px solid rgba(255,107,26,0.2);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start;">
+            <span style="font-size:1.1rem;flex-shrink:0;">💡</span>
+            <div>
+              <p style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--orange);letter-spacing:.06em;margin-bottom:4px;">HOW PAGES WORK</p>
+              <p style="font-size:.78rem;color:var(--muted);line-height:1.6;">
+                Har page ka ek <strong style="color:var(--text);">slug</strong> hota hai (jaise <code style="color:var(--amber);">privacy</code>) — public URL hogi <strong style="color:var(--text);">#page/privacy</strong>.
+                Privacy Policy ke liye slug <code style="color:var(--amber);">privacy</code> use karo — footer link automatically kaam karega.
+              </p>
+            </div>
+          </div>
+
+          <!-- Create / Edit Page form -->
+          <div class="neon-card" style="padding:22px;margin-bottom:16px;">
+            <p id="pg-form-title" style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--orange);letter-spacing:.1em;margin-bottom:16px;">CREATE NEW PAGE</p>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+              <div>
+                <label class="z-label">Page Title * <span style="color:var(--muted)">(shown as heading)</span></label>
+                <input id="pg-title" class="z-input" placeholder="e.g. Privacy Policy" />
+              </div>
+              <div>
+                <label class="z-label">Slug * <span style="color:var(--muted)">(URL: #page/slug)</span></label>
+                <div style="position:relative;">
+                  <input id="pg-slug" class="z-input" placeholder="e.g. privacy"
+                    oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'-')" />
+                  <p id="pg-slug-preview" style="font-size:.65rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:4px;">URL: #page/—</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Page content blocks -->
+            <div style="margin-bottom:14px;">
+              <label class="z-label" style="margin-bottom:10px;">PAGE CONTENT BLOCKS</label>
+
+              <!-- Block type picker -->
+              <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:var(--dark2);border:1px solid var(--border);border-radius:10px;">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--muted);width:100%;margin-bottom:4px;">ADD BLOCK →</span>
+                <button class="block-type-btn" onclick="pgAddBlock('heading')"><span class="icon">H</span><span class="lbl">HEADING</span></button>
+                <button class="block-type-btn" onclick="pgAddBlock('para')"><span class="icon">¶</span><span class="lbl">PARAGRAPH</span></button>
+                <button class="block-type-btn" onclick="pgAddBlock('img')"><span class="icon">🖼</span><span class="lbl">IMAGE</span></button>
+                <button class="block-type-btn" onclick="pgAddBlock('link')"><span class="icon">🔗</span><span class="lbl">LINK</span></button>
+                <button class="block-type-btn" onclick="pgAddBlock('linkimg')"><span class="icon">📸</span><span class="lbl">IMG LINK</span></button>
+                <button class="block-type-btn" onclick="pgAddBlock('section')"><span class="icon">📂</span><span class="lbl">SECTION</span></button>
+              </div>
+
+              <!-- Block list -->
+              <div id="pg-empty-hint" style="text-align:center;padding:24px;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.72rem;background:var(--dark2);border:1px dashed var(--border);border-radius:10px;">
+                No blocks yet. Pick a block type above ↑
+              </div>
+              <div id="pg-block-list" style="display:flex;flex-direction:column;gap:7px;"></div>
+            </div>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+              <button onclick="pgSavePage()" class="btn-orange-solid">💾 SAVE PAGE TO FIREBASE</button>
+              <button onclick="pgPreviewToggle()" class="btn-orange" id="pg-preview-btn">👁 Preview</button>
+              <button id="pg-cancel-btn" onclick="pgCancelEdit()" class="btn-orange" style="display:none;">✕ Cancel Edit</button>
+            </div>
+          </div>
+
+          <!-- Live preview panel -->
+          <div id="pg-preview-panel" class="neon-card" style="display:none;padding:22px;margin-bottom:16px;">
+            <p style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--amber);letter-spacing:.1em;margin-bottom:14px;">LIVE PREVIEW</p>
+            <div id="pg-preview-content"></div>
+          </div>
+
+          <!-- Existing pages list -->
+          <div class="neon-card" style="padding:22px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+              <p style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--amber);letter-spacing:.1em;">SAVED PAGES</p>
+              <button onclick="pgLoadAll()" class="btn-orange" style="padding:7px 14px;font-size:.62rem;">↻ Refresh</button>
+            </div>
+            <div id="pg-list-loading" style="display:flex;align-items:center;justify-content:center;padding:32px 0;"><div class="spinner"></div></div>
+            <div id="pg-list" style="display:none;display:flex;flex-direction:column;gap:8px;"></div>
+            <p id="pg-list-empty" style="display:none;text-align:center;padding:28px 0;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.75rem;">No pages yet. Create your first page above ↑</p>
+          </div>
+
+        </div><!-- /tab-pages -->
+
+      </div>
+    </div>
+
+    <!-- ─── PAGE VIEW (#page/slug) ─── -->
+    <div id="view-page" class="view">
+      <div id="page-loading" style="display:flex;align-items:center;justify-content:center;padding:100px 0;">
+        <div class="spinner"></div>
+      </div>
+      <div id="page-content" style="display:none;max-width:760px;margin:0 auto;padding:28px 16px 72px;">
+        <button onclick="navigate('home')" style="display:flex;align-items:center;gap:7px;color:var(--muted);background:none;border:none;cursor:pointer;font-size:.83rem;margin-bottom:24px;transition:color .2s;" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--muted)'">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
+          Back to Home
+        </button>
+        <div style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border);">
+          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,107,26,.06);border:1px solid rgba(255,107,26,.18);border-radius:99px;padding:4px 12px;margin-bottom:12px;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--orange);letter-spacing:.1em;">ZYNTIX</span>
+          </div>
+          <h1 id="page-title" style="font-family:'Orbitron',sans-serif;font-weight:800;font-size:1.5rem;color:#fff;line-height:1.2;margin-bottom:8px;"></h1>
+          <p id="page-updated" style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--dimmer);"></p>
+        </div>
+        <div id="page-blocks"></div>
+      </div>
+      <div id="page-notfound" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px 16px;text-align:center;gap:12px;">
+        <div style="font-size:3rem;">📄</div>
+        <p style="font-family:'Orbitron',sans-serif;color:#fff;font-size:.9rem;">Page Not Found</p>
+        <p style="color:var(--muted);font-size:.82rem;">This page doesn't exist or hasn't been published yet.</p>
+        <button onclick="navigate('home')" class="btn-orange" style="margin-top:8px;padding:10px 22px;">← Go Home</button>
+      </div>
+    </div><!-- /view-page -->
+
+  </main>
+
+  <!-- ════════ FOOTER ════════ -->
+  <footer style="border-top:1px solid var(--border);padding:24px 16px;">
+    <div style="max-width:1100px;margin:0 auto;">
+      <!-- Top row: logo + links -->
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <img src="data:image/png;base64,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" onerror="this.style.display='none'"
+            style="width:26px;height:26px;border-radius:6px;object-fit:cover;" />
+          <span style="font-family:'Orbitron',sans-serif;font-size:.72rem;color:var(--dimmer);letter-spacing:.12em;font-weight:700;">ZYNTIX</span>
+        </div>
+        <!-- Footer page links — add more slugs here as needed -->
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+          <a onclick="navigate('page','privacy')" href="#page/privacy"
+            style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--muted);text-decoration:none;cursor:pointer;transition:color .2s;"
+            onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--muted)'">
+            Privacy Policy
+          </a>
+          <a onclick="navigate('page','terms')" href="#page/terms"
+            style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--muted);text-decoration:none;cursor:pointer;transition:color .2s;"
+            onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--muted)'">
+            Terms of Use
+          </a>
+          <a onclick="navigate('page','about')" href="#page/about"
+            style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--muted);text-decoration:none;cursor:pointer;transition:color .2s;"
+            onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--muted)'">
+            About
+          </a>
+        </div>
+      </div>
+      <!-- Bottom row: copyright -->
+      <div style="border-top:1px solid var(--border);padding-top:12px;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--dimmer);">© 2025 Zyntix. All rights reserved.</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ════════ JAVASCRIPT ════════ -->
+  <script>
+  const ADMIN_PASSWORD = '@dmin2002'; // ← change password here
+
+  let allApps       = [];
+  let currentFilter = 'All';
+  let currentSearch = '';
+  let editingId     = null;
+  let carouselIdx   = 0;
+  let carouselSlides= [];
+  let adminUnlocked = false;
+
+  // ── Router ──
+  function navigate(view, id) {
+    if (view === 'details' && id) window.location.hash = 'details/' + id;
+    else if (view === 'page' && id) window.location.hash = 'page/' + id;
+    else window.location.hash = view;
+  }
+
+  function handleRoute() {
+    const hash  = (window.location.hash || '#home').replace('#', '') || 'home';
+    const parts = hash.split('/');
+    const view  = parts[0];
+    const param = parts[1] || null;
+
+    if (view === 'admin' && !adminUnlocked) {
+      window.location.hash = 'home';
+      openAdminModal();
+      return;
+    }
+
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    const target = document.getElementById('view-' + view);
+    if (!target) { navigate('home'); return; }
+    target.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'instant' });
+
+    if (view === 'home')    initHome();
+    if (view === 'details') initDetails(param);
+    if (view === 'admin')   initAdmin();
+    if (view === 'page')    initPageView(param);
+  }
+
+  window.addEventListener('hashchange', handleRoute);
+  window.addEventListener('firebase-ready', handleRoute);
+  window.addEventListener('load', () => {
+    if (!window.location.hash || window.location.hash === '#') window.location.hash = 'home';
+    if (window.ZyntixDB) handleRoute();
+  });
+
+  // ── Admin modal ──
+  function openAdminModal() {
+    document.getElementById('admin-modal').classList.add('open');
+    document.getElementById('admin-pw-input').value = '';
+    document.getElementById('admin-pw-error').textContent = '';
+    setTimeout(() => document.getElementById('admin-pw-input').focus(), 100);
+  }
+  function closeAdminModal() {
+    document.getElementById('admin-modal').classList.remove('open');
+    document.getElementById('search-input').value = '';
+    currentSearch = '';
+    renderApps();
+  }
+  function verifyAdminPassword() {
+    const pw = document.getElementById('admin-pw-input').value;
+    if (pw === ADMIN_PASSWORD) {
+      adminUnlocked = true;
+      document.getElementById('admin-modal').classList.remove('open');
+      document.getElementById('search-input').value = '';
+      navigate('admin');
+    } else {
+      document.getElementById('admin-pw-error').textContent = '✗ Incorrect password. Try again.';
+      document.getElementById('admin-pw-input').value = '';
+      document.getElementById('admin-pw-input').focus();
+      const box = document.querySelector('.modal-box');
+      box.style.animation = 'none'; box.offsetHeight;
+      box.style.animation = 'shake .4s ease';
+    }
+  }
+
+  // ── Secret search trigger ──
+  function onSearchInput(val) {
+    if (val.toLowerCase() === 'admin') {
+      document.getElementById('search-input').value = '';
+      openAdminModal();
+      return;
+    }
+    currentSearch = val;
+    renderApps();
+  }
+
+  // ── Home ──
+  async function initHome() {
+    if (!window.ZyntixDB) return;
+    document.getElementById('apps-loading').style.display = 'flex';
+    document.getElementById('apps-grid').style.display    = 'none';
+    document.getElementById('apps-empty').style.display   = 'none';
+    try { allApps = await ZyntixDB.fetchApps(); }
+    catch(e) { showToast('⚠ Firebase not configured. Check your config keys.', 'error'); allApps = []; }
+    document.getElementById('apps-loading').style.display = 'none';
+    updateHeroStats();
+    renderApps();
+  }
+
+  function updateHeroStats() {
+    const live     = allApps.filter(a => a.status === 'Live').length;
+    const installs = allApps.reduce((s, a) => s + (a.clickCount || 0), 0);
+    const sc = document.getElementById('stat-count');
+    const si = document.getElementById('stat-installs');
+    if (sc) sc.textContent = live || allApps.length || '0';
+    if (si) si.textContent = installs >= 1000 ? (installs/1000).toFixed(1)+'K' : installs || '0';
+  }
+
+  function renderApps() {
+    const grid  = document.getElementById('apps-grid');
+    const empty = document.getElementById('apps-empty');
+    if (!grid) return;
+    const q = currentSearch.toLowerCase().trim();
+    const filtered = allApps.filter(app => {
+      const matchCat    = currentFilter === 'All' || app.category === currentFilter;
+      const matchSearch = !q || (app.name||'').toLowerCase().includes(q) || (app.shortDesc||'').toLowerCase().includes(q);
+      return matchCat && matchSearch;
+    });
+    if (!filtered.length) { grid.style.display='none'; empty.style.display='flex'; return; }
+    empty.style.display = 'none';
+    grid.style.display  = 'grid';
+    grid.innerHTML = filtered.map(buildAppCard).join('');
+  }
+
+  function buildAppCard(app) {
+    const thumb = app.thumbnail || ('https://placehold.co/400x200/1a1410/ff6b1a?text=' + encodeURIComponent(app.name||'Z'));
+    return `
+      <div class="neon-card" style="display:flex;flex-direction:column;cursor:pointer;" onclick="navigate('details','${app.id}')">
+        <div style="position:relative;padding-top:50%;overflow:hidden;border-radius:13px 13px 0 0;">
+          <img src="${esc(thumb)}" alt="${esc(app.name)}"
+            style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .5s;"
+            onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'"
+            onerror="this.src='https://placehold.co/400x200/1a1410/ff6b1a?text=Z'" />
+          <div style="position:absolute;top:10px;right:10px;">${badgeHTML(app.status)}</div>
+        </div>
+        <div style="padding:14px;display:flex;flex-direction:column;flex:1;gap:7px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;">
+            <span class="cat-pill ${catPillClass(app.category)}">${esc(app.category||'Other')}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--dimmer);">${app.clickCount||0} installs</span>
+          </div>
+          <p style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:.8rem;color:#fff;line-height:1.3;">${esc(app.name)}</p>
+          <p style="font-size:.8rem;color:var(--muted);line-height:1.55;flex:1;">${esc(app.shortDesc)}</p>
+          <button class="btn-orange" style="width:100%;padding:9px 0;font-size:.62rem;margin-top:4px;">VIEW DETAILS →</button>
+        </div>
+      </div>`;
+  }
+
+  function setCategory(el) {
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    currentFilter = el.dataset.cat;
+    renderApps();
+  }
+
+  // ── Details ──
+  async function initDetails(id) {
+    if (!id) return;
+    document.getElementById('details-loading').style.display = 'flex';
+    document.getElementById('details-content').style.display = 'none';
+    if (!allApps.length && window.ZyntixDB) { try { allApps = await ZyntixDB.fetchApps(); } catch(e){} }
+    const app = allApps.find(a => a.id === id);
+    if (!app) {
+      document.getElementById('details-loading').innerHTML =
+        '<p style="color:var(--muted);font-family:\'JetBrains Mono\',monospace;font-size:.75rem;">App not found.</p>';
+      return;
+    }
+    document.getElementById('det-thumb').src              = app.thumbnail || 'https://placehold.co/72x72/1a1410/ff6b1a?text=Z';
+    document.getElementById('det-name').textContent       = app.name || '';
+    document.getElementById('det-shortdesc').textContent  = app.shortDesc || '';
+    document.getElementById('det-fulldesc').textContent   = app.fullDesc || '';
+    document.getElementById('det-clicks').textContent     = app.clickCount || 0;
+    const statusEl = document.getElementById('det-status');
+    statusEl.className = badgeClass(app.status); statusEl.textContent = app.status || 'Live';
+    const catEl = document.getElementById('det-category');
+    catEl.className = 'cat-pill ' + catPillClass(app.category); catEl.textContent = app.category || '';
+    document.getElementById('det-cta').onclick = () => {
+      if (window.ZyntixDB) ZyntixDB.incrementClickCount(id).catch(()=>{});
+      const local = allApps.find(a=>a.id===id);
+      if (local) { local.clickCount=(local.clickCount||0)+1; document.getElementById('det-clicks').textContent=local.clickCount; }
+      if (app.redirectUrl) window.open(app.redirectUrl, '_blank');
+    };
+    let shots = Array.isArray(app.screenshots) ? app.screenshots.filter(Boolean)
+      : (typeof app.screenshots==='string' ? app.screenshots.split(',').map(s=>s.trim()).filter(Boolean) : []);
+    const cWrap = document.getElementById('det-carousel-wrap');
+    if (shots.length) { cWrap.style.display='block'; carouselSlides=shots; carouselIdx=0; buildCarousel(); }
+    else cWrap.style.display='none';
+    document.getElementById('details-loading').style.display='none';
+    document.getElementById('details-content').style.display='block';
+    renderAppRichContent(app);
+  }
+
+  function buildCarousel() {
+    document.getElementById('carousel-track').innerHTML = carouselSlides.map((src,i)=>
+      `<div class="carousel-slide"><img src="${esc(src)}" alt="Screenshot ${i+1}" style="width:100%;max-height:300px;object-fit:contain;border-radius:8px;" onerror="this.style.display='none'" /></div>`
+    ).join('');
+    document.getElementById('carousel-dots').innerHTML = carouselSlides.map((_,i)=>
+      `<button onclick="carouselGoTo(${i})" id="cdot-${i}" style="width:8px;height:8px;border-radius:50%;border:none;cursor:pointer;transition:all .2s;background:${i===0?'var(--orange)':'var(--border)'};"></button>`
+    ).join('');
+    updateCarouselPos();
+  }
+  function updateCarouselPos() {
+    document.getElementById('carousel-track').style.transform=`translateX(-${carouselIdx*100}%)`;
+    carouselSlides.forEach((_,i)=>{const d=document.getElementById('cdot-'+i);if(d)d.style.background=i===carouselIdx?'var(--orange)':'var(--border)';});
+  }
+  function carouselNext(){ carouselIdx=(carouselIdx+1)%carouselSlides.length; updateCarouselPos(); }
+  function carouselPrev(){ carouselIdx=(carouselIdx-1+carouselSlides.length)%carouselSlides.length; updateCarouselPos(); }
+  function carouselGoTo(i){ carouselIdx=i; updateCarouselPos(); }
+
+  // ── Admin ──
+  function initAdmin() { cancelEdit(); loadAdminApps(); switchAdminTab('apps'); }
+  async function loadAdminApps() {
+    if (!window.ZyntixDB) { showToast('Firebase not ready','error'); return; }
+    document.getElementById('admin-loading').style.display='flex';
+    document.getElementById('admin-table-wrap').style.display='none';
+    try { allApps=await ZyntixDB.fetchApps(); } catch(e){ showToast('Fetch error: '+e.message,'error'); allApps=[]; }
+    renderAdminTable();
+    rcbPopulateAppSelect();
+    document.getElementById('admin-loading').style.display='none';
+    document.getElementById('admin-table-wrap').style.display='block';
+  }
+  function renderAdminTable() {
+    const tbody=document.getElementById('admin-tbody');
+    const empty=document.getElementById('admin-empty-msg');
+    if (!allApps.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+    empty.style.display='none';
+    tbody.innerHTML=allApps.map(app=>`
+      <tr>
+        <td><div style="display:flex;align-items:center;gap:10px;">
+          <img src="${esc(app.thumbnail||'https://placehold.co/36x36/1a1410/ff6b1a?text=Z')}"
+            style="width:36px;height:36px;border-radius:8px;object-fit:cover;border:1px solid var(--border);flex-shrink:0;"
+            onerror="this.src='https://placehold.co/36x36/1a1410/ff6b1a?text=Z'" />
+          <div>
+            <p style="color:#fff;font-size:.83rem;font-weight:500;">${esc(app.name)}</p>
+            <p style="color:var(--muted);font-size:.72rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(app.shortDesc)}</p>
+          </div>
+        </div></td>
+        <td><span class="cat-pill ${catPillClass(app.category)}">${esc(app.category||'Other')}</span></td>
+        <td><span class="${badgeClass(app.status)}">${esc(app.status||'Live')}</span></td>
+        <td style="text-align:center;"><span style="font-family:'Orbitron',sans-serif;color:var(--orange);font-weight:700;">${app.clickCount||0}</span></td>
+        <td style="text-align:right;"><div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+          <button class="btn-edit" onclick="startEdit('${app.id}')">Edit</button>
+          <button class="btn-danger" onclick="confirmDelete('${app.id}','${esc(app.name)}')">Delete</button>
+        </div></td>
+      </tr>`).join('');
+  }
+  async function submitAppForm() {
+    if (!window.ZyntixDB) { showToast('Firebase not ready','error'); return; }
+    const name=document.getElementById('f-name').value.trim();
+    const shortDesc=document.getElementById('f-shortdesc').value.trim();
+    const fullDesc=document.getElementById('f-fulldesc').value.trim();
+    const category=document.getElementById('f-category').value;
+    const url=document.getElementById('f-url').value.trim();
+    const status=document.getElementById('f-status').value;
+    const thumb=document.getElementById('f-thumb').value.trim();
+    const shots=document.getElementById('f-screenshots').value.split(',').map(s=>s.trim()).filter(Boolean);
+    if (!name||!shortDesc||!fullDesc||!category||!url||!status){ showToast('⚠ Fill all required fields','error'); return; }
+    const data={name,shortDesc,fullDesc,category,redirectUrl:url,status,thumbnail:thumb,screenshots:shots};
+    try {
+      if (editingId){ await ZyntixDB.updateApp(editingId,data); showToast('✓ App updated!'); }
+      else { await ZyntixDB.addApp(data); showToast('✓ App added!'); }
+      cancelEdit(); loadAdminApps();
+    } catch(e){ showToast('Error: '+e.message,'error'); }
+  }
+  function startEdit(id) {
+    const app=allApps.find(a=>a.id===id); if(!app) return;
+    editingId=id;
+    document.getElementById('form-title').textContent='EDIT APP';
+    document.getElementById('cancel-edit-btn').style.display='inline-block';
+    document.getElementById('f-name').value=app.name||'';
+    document.getElementById('f-shortdesc').value=app.shortDesc||'';
+    document.getElementById('f-fulldesc').value=app.fullDesc||'';
+    document.getElementById('f-category').value=app.category||'';
+    document.getElementById('f-url').value=app.redirectUrl||'';
+    document.getElementById('f-status').value=app.status||'';
+    document.getElementById('f-thumb').value=app.thumbnail||'';
+    document.getElementById('f-screenshots').value=Array.isArray(app.screenshots)?app.screenshots.join(', '):(app.screenshots||'');
+    document.getElementById('form-title').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  function cancelEdit() {
+    editingId=null;
+    document.getElementById('form-title').textContent='ADD NEW APP';
+    document.getElementById('cancel-edit-btn').style.display='none';
+    ['f-name','f-shortdesc','f-fulldesc','f-url','f-thumb','f-screenshots'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('f-category').value='';
+    document.getElementById('f-status').value='';
+  }
+  async function confirmDelete(id,name) {
+    if(!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    try { await ZyntixDB.deleteApp(id); showToast('✓ "'+name+'" deleted'); loadAdminApps(); }
+    catch(e){ showToast('Delete failed: '+e.message,'error'); }
+  }
+
+  // ── Helpers ──
+  function esc(s){ if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function badgeHTML(s){ return `<span class="${badgeClass(s)}">${esc(s||'Live')}</span>`; }
+  function badgeClass(s){ if(s==='Beta')return'badge-beta'; if(s==='Coming Soon')return'badge-coming'; return'badge-live'; }
+  function catPillClass(c){ const m={'AI Tools':'cat-ai','Utilities':'cat-utility','Games':'cat-game','Productivity':'cat-prod'}; return m[c]||'cat-other'; }
+
+  let toastTimer;
+  function showToast(msg,type='success'){
+    const t=document.getElementById('toast');
+    t.textContent=msg;
+    t.style.color=type==='error'?'#f87171':'var(--orange)';
+    t.style.borderColor=type==='error'?'rgba(239,68,68,0.4)':'rgba(255,107,26,0.4)';
+    t.classList.add('show'); clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>t.classList.remove('show'),3000);
+  }
+
+  if (!window.location.hash||window.location.hash==='#') window.location.hash='home';
+
+  // ══════════════════════════════════════════════════════
+  //  RICH CONTENT BUILDER (RCB)
+  //  Blocks stored in Firestore as app.richContent = [{type, ...data}]
+  // ══════════════════════════════════════════════════════
+
+  let rcbBlocks   = [];   // current block list being edited
+  let rcbAppId    = null; // which app's content we're editing
+  let bemTarget   = null; // { type, idx, parentIdx } — block being edited
+  let rcbPreviewing = false;
+
+  // ── Tab switcher ──
+  function switchAdminTab(tab) {
+    document.getElementById('admin-tab-apps').style.display    = tab==='apps'    ? 'block' : 'none';
+    document.getElementById('admin-tab-content').style.display = tab==='content' ? 'block' : 'none';
+    document.getElementById('admin-tab-pages').style.display   = tab==='pages'   ? 'block' : 'none';
+    document.getElementById('tab-apps').classList.toggle('active',    tab==='apps');
+    document.getElementById('tab-content').classList.toggle('active', tab==='content');
+    document.getElementById('tab-pages').classList.toggle('active',   tab==='pages');
+    if (tab==='content') rcbPopulateAppSelect();
+    if (tab==='pages')   pgLoadAll();
+  }
+
+  // ── Populate app dropdown in RCB ──
+  function rcbPopulateAppSelect() {
+    const sel = document.getElementById('rcb-app-select');
+    sel.innerHTML = '<option value="">— Select an app —</option>';
+    allApps.forEach(app => {
+      const o = document.createElement('option');
+      o.value = app.id; o.textContent = app.name;
+      sel.appendChild(o);
+    });
+  }
+
+  function rcbSelectApp(id) { rcbAppId = id || null; }
+
+  function rcbLoadApp() {
+    if (!rcbAppId) { showToast('Select an app first','error'); return; }
+    const app = allApps.find(a=>a.id===rcbAppId);
+    if (!app) { showToast('App not found','error'); return; }
+    rcbBlocks = app.richContent ? JSON.parse(JSON.stringify(app.richContent)) : [];
+    document.getElementById('rcb-builder').style.display = 'block';
+    document.getElementById('rcb-app-name').style.display = 'block';
+    document.getElementById('rcb-app-name').textContent = '✓ Editing: ' + app.name;
+    rcbRenderBlockList();
+    showToast('✓ Loaded: ' + app.name);
+  }
+
+  // ── Add a top-level block ──
+  function rcbAddBlock(type, parentIdx=null) {
+    const block = makeBlock(type);
+    if (parentIdx !== null) {
+      const parent = rcbBlocks[parentIdx];
+      if (!parent.children) parent.children = [];
+      parent.children.push(block);
+      rcbRenderBlockList();
+      // Open edit modal for new sub-block
+      openBlockEdit(type, parent.children.length-1, parentIdx);
+    } else {
+      rcbBlocks.push(block);
+      rcbRenderBlockList();
+      openBlockEdit(type, rcbBlocks.length-1, null);
+    }
+  }
+
+  function makeBlock(type) {
+    const base = { type, id: Date.now() + Math.random() };
+    if (type==='heading')  return {...base, text:''};
+    if (type==='para')     return {...base, text:''};
+    if (type==='img')      return {...base, url:'', caption:''};
+    if (type==='link')     return {...base, label:'', url:''};
+    if (type==='linkimg')  return {...base, imgUrl:'', href:'', alt:''};
+    if (type==='section')  return {...base, title:'', children:[]};
+    return base;
+  }
+
+  // ── Render block list in admin ──
+  function rcbRenderBlockList() {
+    const list  = document.getElementById('rcb-block-list');
+    const empty = document.getElementById('rcb-empty-hint');
+    if (!rcbBlocks.length) {
+      list.innerHTML=''; empty.style.display='block'; return;
+    }
+    empty.style.display='none';
+    list.innerHTML = rcbBlocks.map((b,i) => rcbBlockHTML(b, i, null)).join('');
+  }
+
+  function rcbBlockHTML(b, idx, parentIdx) {
+    const icons = {heading:'H', para:'¶', img:'🖼', link:'🔗', linkimg:'📸', section:'📂'};
+    const labels = {heading:'Heading', para:'Paragraph', img:'Image', link:'Link', linkimg:'Clickable Image', section:'Section'};
+    const preview = blockPreviewText(b);
+    const isTop   = parentIdx===null;
+
+    let actionsHTML = `
+      <button class="rcb-btn up"  onclick="rcbMove(${idx},${parentIdx},'up')"   title="Move up">↑</button>
+      <button class="rcb-btn dn"  onclick="rcbMove(${idx},${parentIdx},'down')" title="Move down">↓</button>
+      <button class="rcb-btn"     onclick="openBlockEdit('${b.type}',${idx},${parentIdx===null?'null':parentIdx})">Edit</button>
+      <button class="rcb-btn del" onclick="rcbDeleteBlock(${idx},${parentIdx===null?'null':parentIdx})">✕</button>`;
+
+    let sectionInner = '';
+    if (b.type==='section') {
+      const childrenHTML = (b.children||[]).map((c,ci)=>rcbBlockHTML(c,ci,idx)).join('');
+      sectionInner = `
+        <div class="rcb-section-inner">
+          ${childrenHTML}
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+            <button class="rcb-btn" onclick="rcbAddBlock('heading',${idx})">+H</button>
+            <button class="rcb-btn" onclick="rcbAddBlock('para',${idx})">+¶</button>
+            <button class="rcb-btn" onclick="rcbAddBlock('img',${idx})">+🖼</button>
+            <button class="rcb-btn" onclick="rcbAddBlock('link',${idx})">+🔗</button>
+            <button class="rcb-btn" onclick="rcbAddBlock('linkimg',${idx})">+📸</button>
+          </div>
+        </div>`;
+    }
+
+    return `
+      <div class="rcb-block" id="rcb-block-${b.id}">
+        <span class="rcb-block-icon">${icons[b.type]||'?'}</span>
+        <div class="rcb-block-body">
+          <div class="rcb-block-label">${labels[b.type]||b.type}</div>
+          <div class="rcb-block-preview">${esc(preview)}</div>
+          ${sectionInner}
+        </div>
+        <div class="rcb-block-actions">${actionsHTML}</div>
+      </div>`;
+  }
+
+  function blockPreviewText(b) {
+    if (b.type==='heading')  return b.text || '(empty heading)';
+    if (b.type==='para')     return b.text ? b.text.substring(0,80)+'…' : '(empty paragraph)';
+    if (b.type==='img')      return b.url ? b.url.substring(0,60) : '(no image URL)';
+    if (b.type==='link')     return b.label ? b.label + ' → ' + (b.url||'') : '(empty link)';
+    if (b.type==='linkimg')  return b.imgUrl ? b.imgUrl.substring(0,50) : '(no image)';
+    if (b.type==='section')  return b.title || '(untitled section)' + ' · ' + (b.children||[]).length + ' sub-blocks';
+    return '';
+  }
+
+  // ── Move block ──
+  function rcbMove(idx, parentIdx, dir) {
+    const arr = parentIdx===null ? rcbBlocks : rcbBlocks[parentIdx].children;
+    const delta = dir==='up' ? -1 : 1;
+    const ni = idx+delta;
+    if (ni<0||ni>=arr.length) return;
+    [arr[idx], arr[ni]] = [arr[ni], arr[idx]];
+    rcbRenderBlockList();
+  }
+
+  // ── Delete block ──
+  function rcbDeleteBlock(idx, parentIdx) {
+    if (!confirm('Delete this block?')) return;
+    if (parentIdx===null||parentIdx==='null') rcbBlocks.splice(idx,1);
+    else rcbBlocks[parentIdx].children.splice(idx,1);
+    rcbRenderBlockList();
+    if (rcbPreviewing) rcbShowPreview();
+  }
+
+  // ── Open edit modal ──
+  function openBlockEdit(type, idx, parentIdx) {
+    bemTarget = { type, idx, parentIdx: parentIdx==='null'?null:parentIdx };
+    const labels = {heading:'HEADING',para:'PARAGRAPH',img:'IMAGE',link:'LINK',linkimg:'CLICKABLE IMAGE',section:'SECTION'};
+    document.getElementById('bem-title').textContent = 'EDIT ' + (labels[type]||type);
+
+    // Hide all panels, show correct one
+    ['heading','para','img','link','linkimg','section'].forEach(t =>
+      document.getElementById('bem-'+t).style.display = t===type ? 'block' : 'none'
+    );
+
+    // Populate existing values
+    const arr  = bemTarget.parentIdx===null ? rcbBlocks : rcbBlocks[bemTarget.parentIdx].children;
+    const block = arr[idx];
+    if (type==='heading')  document.getElementById('bem-heading-text').value = block.text||'';
+    if (type==='para')     document.getElementById('bem-para-text').value    = block.text||'';
+    if (type==='img') {
+      document.getElementById('bem-img-url').value     = block.url||'';
+      document.getElementById('bem-img-caption').value = block.caption||'';
+      previewBemImg(block.url||'','bem-img-preview','bem-img-preview-img');
+    }
+    if (type==='link') {
+      document.getElementById('bem-link-label').value = block.label||'';
+      document.getElementById('bem-link-url').value   = block.url||'';
+    }
+    if (type==='linkimg') {
+      document.getElementById('bem-linkimg-img').value = block.imgUrl||'';
+      document.getElementById('bem-linkimg-url').value = block.href||'';
+      document.getElementById('bem-linkimg-alt').value = block.alt||'';
+      previewBemImg(block.imgUrl||'','bem-linkimg-preview','bem-linkimg-preview-img');
+    }
+    if (type==='section') document.getElementById('bem-section-title').value = block.title||'';
+
+    document.getElementById('block-edit-modal').classList.add('open');
+  }
+
+  function closeBlockEdit() {
+    document.getElementById('block-edit-modal').classList.remove('open');
+    bemTarget = null;
+  }
+
+  function saveBlockEdit() {
+    if (!bemTarget) return;
+    const { type, idx, parentIdx } = bemTarget;
+    const arr   = parentIdx===null ? rcbBlocks : rcbBlocks[parentIdx].children;
+    const block = arr[idx];
+
+    if (type==='heading')  block.text    = document.getElementById('bem-heading-text').value.trim();
+    if (type==='para')     block.text    = document.getElementById('bem-para-text').value.trim();
+    if (type==='img') {
+      block.url     = document.getElementById('bem-img-url').value.trim();
+      block.caption = document.getElementById('bem-img-caption').value.trim();
+    }
+    if (type==='link') {
+      block.label = document.getElementById('bem-link-label').value.trim();
+      block.url   = document.getElementById('bem-link-url').value.trim();
+    }
+    if (type==='linkimg') {
+      block.imgUrl = document.getElementById('bem-linkimg-img').value.trim();
+      block.href   = document.getElementById('bem-linkimg-url').value.trim();
+      block.alt    = document.getElementById('bem-linkimg-alt').value.trim();
+    }
+    if (type==='section') block.title = document.getElementById('bem-section-title').value.trim();
+
+    closeBlockEdit();
+    rcbRenderBlockList();
+    if (rcbPreviewing) rcbShowPreview();
+    showToast('✓ Block saved');
+  }
+
+  // ── Image URL preview in modal ──
+  function previewBemImg(url, wrapId, imgId) {
+    const wrap = document.getElementById(wrapId);
+    const img  = document.getElementById(imgId);
+    if (url && url.startsWith('http')) {
+      img.src = url; wrap.style.display='block';
+    } else { wrap.style.display='none'; }
+  }
+
+  // ── Preview toggle ──
+  function rcbPreviewToggle() {
+    rcbPreviewing = !rcbPreviewing;
+    const panel = document.getElementById('rcb-preview-panel');
+    const btn   = document.getElementById('rcb-preview-btn');
+    if (rcbPreviewing) { panel.style.display='block'; rcbShowPreview(); btn.textContent='✕ Close Preview'; }
+    else { panel.style.display='none'; btn.textContent='👁 Preview'; }
+  }
+
+  function rcbShowPreview() {
+    document.getElementById('rcb-preview-content').innerHTML = renderRichContent(rcbBlocks);
+  }
+
+  // ── Save to Firebase ──
+  async function rcbSaveContent() {
+    if (!rcbAppId || !window.ZyntixDB) { showToast('No app selected or Firebase not ready','error'); return; }
+    try {
+      await ZyntixDB.updateApp(rcbAppId, { richContent: rcbBlocks });
+      // Update local cache
+      const local = allApps.find(a=>a.id===rcbAppId);
+      if (local) local.richContent = JSON.parse(JSON.stringify(rcbBlocks));
+      showToast('✓ Rich content saved to Firebase!');
+    } catch(e) { showToast('Save error: '+e.message,'error'); }
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  RENDER RICH CONTENT → HTML (used in details view + preview)
+  // ══════════════════════════════════════════════════════
+  function renderRichContent(blocks) {
+    if (!blocks||!blocks.length) return '';
+    return blocks.map(b => renderBlock(b)).join('');
+  }
+
+  function renderBlock(b) {
+    if (!b) return '';
+    if (b.type==='heading') {
+      return `<h3 class="rc-heading">${esc(b.text)}</h3>`;
+    }
+    if (b.type==='para') {
+      // Preserve line breaks
+      const html = esc(b.text||'').replace(/\n/g,'<br/>');
+      return `<p class="rc-para">${html}</p>`;
+    }
+    if (b.type==='img') {
+      return `
+        <figure style="margin:10px 0;">
+          <img src="${esc(b.url)}" alt="${esc(b.caption||'')}" class="rc-img" onerror="this.style.display='none'" />
+          ${b.caption ? `<figcaption style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:4px;">${esc(b.caption)}</figcaption>` : ''}
+        </figure>`;
+    }
+    if (b.type==='link') {
+      return `
+        <div style="margin:8px 0;">
+          <a href="${esc(b.url)}" target="_blank" rel="noopener" class="rc-link">
+            🔗 ${esc(b.label||b.url)}
+          </a>
+        </div>`;
+    }
+    if (b.type==='linkimg') {
+      return `
+        <a href="${esc(b.href)}" target="_blank" rel="noopener" title="${esc(b.alt||'')}">
+          <img src="${esc(b.imgUrl)}" alt="${esc(b.alt||'')}" class="rc-link-img" onerror="this.style.display='none'" />
+        </a>`;
+    }
+    if (b.type==='section') {
+      const inner = (b.children||[]).map(c=>renderBlock(c)).join('');
+      return `
+        <div class="rc-section">
+          ${b.title ? `<p class="rc-section-title">${esc(b.title)}</p>` : ''}
+          ${inner}
+        </div>`;
+    }
+    return '';
+  }
+
+  // ── Inject rich content into details page ──
+  function renderAppRichContent(app) {
+    const container = document.getElementById('det-rich-content');
+    if (!container) return;
+    const html = renderRichContent(app.richContent||[]);
+    container.innerHTML = html
+      ? `<div style="margin-top:14px;">${html}</div>`
+      : '';
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  PAGES MANAGER (Tab 3)
+  //  Each page: { slug, title, blocks[], updatedAt }
+  //  Stored in Firestore collection "pages" — doc ID = slug
+  // ══════════════════════════════════════════════════════
+
+  let allPages      = [];   // all pages fetched from Firestore
+  let pgBlocks      = [];   // blocks being edited for current page
+  let pgEditingSlug = null; // slug of page being edited (null = new)
+  let pgPreviewing  = false;
+
+  // ── Slug input → update preview label ──
+  document.addEventListener('input', function(e) {
+    if (e.target && e.target.id === 'pg-slug') {
+      const v = e.target.value || '—';
+      document.getElementById('pg-slug-preview').textContent = 'URL: #page/' + v;
+    }
+  });
+
+  // ── Load all pages from Firestore ──
+  async function pgLoadAll() {
+    if (!window.ZyntixDB) return;
+    const loadEl  = document.getElementById('pg-list-loading');
+    const listEl  = document.getElementById('pg-list');
+    const emptyEl = document.getElementById('pg-list-empty');
+    loadEl.style.display = 'flex';
+    listEl.style.display = 'none';
+    emptyEl.style.display = 'none';
+
+    try { allPages = await ZyntixDB.fetchPages(); }
+    catch(e) { showToast('Pages fetch error: '+e.message,'error'); allPages=[]; }
+
+    loadEl.style.display = 'none';
+    pgRenderList();
+  }
+
+  // ── Render saved pages list ──
+  function pgRenderList() {
+    const listEl  = document.getElementById('pg-list');
+    const emptyEl = document.getElementById('pg-list-empty');
+    if (!allPages.length) { emptyEl.style.display='block'; listEl.style.display='none'; return; }
+    emptyEl.style.display = 'none';
+    listEl.style.display  = 'flex';
+    listEl.innerHTML = allPages.map(pg => `
+      <div style="background:var(--dark2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:0;">
+          <p style="color:#fff;font-weight:600;font-size:.88rem;margin-bottom:3px;">${esc(pg.title||'Untitled')}</p>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--orange);">#page/${esc(pg.slug)}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--muted);">${(pg.blocks||[]).length} blocks</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;">
+          <button onclick="pgOpenPage('${esc(pg.slug)}')" class="btn-orange" style="padding:6px 12px;font-size:.65rem;">🔗 View</button>
+          <button onclick="pgStartEdit('${esc(pg.slug)}')" class="btn-edit" style="padding:6px 12px;font-size:.65rem;">Edit</button>
+          <button onclick="pgDeletePage('${esc(pg.slug)}','${esc(pg.title||'')}')" class="btn-danger" style="padding:6px 12px;font-size:.65rem;">Delete</button>
+        </div>
+      </div>`).join('');
+  }
+
+  // ── Open page in public view ──
+  function pgOpenPage(slug) { navigate('page', slug); }
+
+  // ── Add block to page ──
+  function pgAddBlock(type, parentIdx=null) {
+    const block = makeBlock(type);
+    if (parentIdx !== null) {
+      if (!pgBlocks[parentIdx].children) pgBlocks[parentIdx].children = [];
+      pgBlocks[parentIdx].children.push(block);
+      pgRenderBlockList();
+      pgOpenBlockEdit(type, pgBlocks[parentIdx].children.length-1, parentIdx);
+    } else {
+      pgBlocks.push(block);
+      pgRenderBlockList();
+      pgOpenBlockEdit(type, pgBlocks.length-1, null);
+    }
+  }
+
+  // ── Render page block list in admin ──
+  function pgRenderBlockList() {
+    const list  = document.getElementById('pg-block-list');
+    const empty = document.getElementById('pg-empty-hint');
+    if (!pgBlocks.length) { list.innerHTML=''; empty.style.display='block'; return; }
+    empty.style.display = 'none';
+    list.innerHTML = pgBlocks.map((b,i) => pgBlockHTML(b, i, null)).join('');
+    if (pgPreviewing) pgShowPreview();
+  }
+
+  function pgBlockHTML(b, idx, parentIdx) {
+    const icons  = {heading:'H', para:'¶', img:'🖼', link:'🔗', linkimg:'📸', section:'📂'};
+    const labels = {heading:'Heading', para:'Paragraph', img:'Image', link:'Link', linkimg:'Clickable Image', section:'Section'};
+    const preview = blockPreviewText(b);
+    let sectionInner = '';
+    if (b.type==='section') {
+      const childrenHTML = (b.children||[]).map((c,ci) => pgBlockHTML(c,ci,idx)).join('');
+      sectionInner = `
+        <div class="rcb-section-inner">
+          ${childrenHTML}
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+            <button class="rcb-btn" onclick="pgAddBlock('heading',${idx})">+H</button>
+            <button class="rcb-btn" onclick="pgAddBlock('para',${idx})">+¶</button>
+            <button class="rcb-btn" onclick="pgAddBlock('img',${idx})">+🖼</button>
+            <button class="rcb-btn" onclick="pgAddBlock('link',${idx})">+🔗</button>
+            <button class="rcb-btn" onclick="pgAddBlock('linkimg',${idx})">+📸</button>
+          </div>
+        </div>`;
+    }
+    return `
+      <div class="rcb-block">
+        <span class="rcb-block-icon">${icons[b.type]||'?'}</span>
+        <div class="rcb-block-body">
+          <div class="rcb-block-label">${labels[b.type]||b.type}</div>
+          <div class="rcb-block-preview">${esc(preview)}</div>
+          ${sectionInner}
+        </div>
+        <div class="rcb-block-actions">
+          <button class="rcb-btn up" onclick="pgMove(${idx},${parentIdx===null?'null':parentIdx},'up')">↑</button>
+          <button class="rcb-btn dn" onclick="pgMove(${idx},${parentIdx===null?'null':parentIdx},'down')">↓</button>
+          <button class="rcb-btn"   onclick="pgOpenBlockEdit('${b.type}',${idx},${parentIdx===null?'null':parentIdx})">Edit</button>
+          <button class="rcb-btn del" onclick="pgDeleteBlock(${idx},${parentIdx===null?'null':parentIdx})">✕</button>
+        </div>
+      </div>`;
+  }
+
+  function pgMove(idx, parentIdx, dir) {
+    const arr = (parentIdx===null||parentIdx==='null') ? pgBlocks : pgBlocks[parentIdx].children;
+    const ni = idx + (dir==='up'?-1:1);
+    if (ni<0||ni>=arr.length) return;
+    [arr[idx],arr[ni]] = [arr[ni],arr[idx]];
+    pgRenderBlockList();
+  }
+
+  function pgDeleteBlock(idx, parentIdx) {
+    if (!confirm('Delete this block?')) return;
+    if (parentIdx===null||parentIdx==='null') pgBlocks.splice(idx,1);
+    else pgBlocks[parentIdx].children.splice(idx,1);
+    pgRenderBlockList();
+  }
+
+  // ── Page block edit modal — reuse the same BEM modal with a pg_ target flag ──
+  let pgBemTarget = null;
+
+  function pgOpenBlockEdit(type, idx, parentIdx) {
+    pgBemTarget = { type, idx, parentIdx: (parentIdx==='null'||parentIdx===null) ? null : Number(parentIdx) };
+    bemTarget   = null; // clear RCB target so save goes to page
+    const labels = {heading:'HEADING',para:'PARAGRAPH',img:'IMAGE',link:'LINK',linkimg:'CLICKABLE IMAGE',section:'SECTION'};
+    document.getElementById('bem-title').textContent = 'EDIT ' + (labels[type]||type);
+    ['heading','para','img','link','linkimg','section'].forEach(t =>
+      document.getElementById('bem-'+t).style.display = t===type ? 'block' : 'none'
+    );
+    const arr   = pgBemTarget.parentIdx===null ? pgBlocks : pgBlocks[pgBemTarget.parentIdx].children;
+    const block = arr[idx];
+    if (type==='heading') document.getElementById('bem-heading-text').value = block.text||'';
+    if (type==='para')    document.getElementById('bem-para-text').value    = block.text||'';
+    if (type==='img') {
+      document.getElementById('bem-img-url').value     = block.url||'';
+      document.getElementById('bem-img-caption').value = block.caption||'';
+      previewBemImg(block.url||'','bem-img-preview','bem-img-preview-img');
+    }
+    if (type==='link') {
+      document.getElementById('bem-link-label').value = block.label||'';
+      document.getElementById('bem-link-url').value   = block.url||'';
+    }
+    if (type==='linkimg') {
+      document.getElementById('bem-linkimg-img').value = block.imgUrl||'';
+      document.getElementById('bem-linkimg-url').value = block.href||'';
+      document.getElementById('bem-linkimg-alt').value = block.alt||'';
+      previewBemImg(block.imgUrl||'','bem-linkimg-preview','bem-linkimg-preview-img');
+    }
+    if (type==='section') document.getElementById('bem-section-title').value = block.title||'';
+    document.getElementById('block-edit-modal').classList.add('open');
+  }
+
+  // ── Override saveBlockEdit to route to correct target (RCB or Page) ──
+  const _origSaveBlockEdit = saveBlockEdit;
+  saveBlockEdit = function() {
+    if (pgBemTarget) {
+      // Save to page blocks
+      const { type, idx, parentIdx } = pgBemTarget;
+      const arr   = parentIdx===null ? pgBlocks : pgBlocks[parentIdx].children;
+      const block = arr[idx];
+      if (type==='heading') block.text    = document.getElementById('bem-heading-text').value.trim();
+      if (type==='para')    block.text    = document.getElementById('bem-para-text').value.trim();
+      if (type==='img') {
+        block.url     = document.getElementById('bem-img-url').value.trim();
+        block.caption = document.getElementById('bem-img-caption').value.trim();
+      }
+      if (type==='link') {
+        block.label = document.getElementById('bem-link-label').value.trim();
+        block.url   = document.getElementById('bem-link-url').value.trim();
+      }
+      if (type==='linkimg') {
+        block.imgUrl = document.getElementById('bem-linkimg-img').value.trim();
+        block.href   = document.getElementById('bem-linkimg-url').value.trim();
+        block.alt    = document.getElementById('bem-linkimg-alt').value.trim();
+      }
+      if (type==='section') block.title = document.getElementById('bem-section-title').value.trim();
+      pgBemTarget = null;
+      closeBlockEdit();
+      pgRenderBlockList();
+      showToast('✓ Block saved');
+    } else {
+      // Original RCB save
+      _origSaveBlockEdit();
+    }
+  };
+
+  // Override closeBlockEdit to also clear pgBemTarget
+  const _origCloseBlockEdit = closeBlockEdit;
+  closeBlockEdit = function() {
+    pgBemTarget = null;
+    bemTarget   = null;
+    document.getElementById('block-edit-modal').classList.remove('open');
+  };
+
+  // ── Preview ──
+  function pgPreviewToggle() {
+    pgPreviewing = !pgPreviewing;
+    const panel = document.getElementById('pg-preview-panel');
+    const btn   = document.getElementById('pg-preview-btn');
+    if (pgPreviewing) {
+      panel.style.display='block';
+      pgShowPreview();
+      btn.textContent='✕ Close Preview';
+    } else {
+      panel.style.display='none';
+      btn.textContent='👁 Preview';
+    }
+  }
+  function pgShowPreview() {
+    const title = document.getElementById('pg-title').value || 'Untitled Page';
+    document.getElementById('pg-preview-content').innerHTML =
+      `<h2 style="font-family:'Orbitron',sans-serif;font-size:1.1rem;color:#fff;margin-bottom:16px;">${esc(title)}</h2>` +
+      renderRichContent(pgBlocks);
+  }
+
+  // ── Save page to Firebase ──
+  async function pgSavePage() {
+    if (!window.ZyntixDB) { showToast('Firebase not ready','error'); return; }
+    const title = document.getElementById('pg-title').value.trim();
+    const slug  = document.getElementById('pg-slug').value.trim();
+    if (!title||!slug) { showToast('⚠ Title and Slug are required','error'); return; }
+    if (!/^[a-z0-9-]+$/.test(slug)) { showToast('⚠ Slug: only lowercase letters, numbers, hyphens','error'); return; }
+    try {
+      await ZyntixDB.savePage(slug, { title, slug, blocks: pgBlocks });
+      showToast('✓ Page "'+title+'" saved! URL: #page/'+slug);
+      pgCancelEdit();
+      pgLoadAll();
+    } catch(e) { showToast('Save error: '+e.message,'error'); }
+  }
+
+  // ── Load page into form for editing ──
+  function pgStartEdit(slug) {
+    const pg = allPages.find(p=>p.slug===slug||p.id===slug);
+    if (!pg) return;
+    pgEditingSlug = slug;
+    pgBlocks = pg.blocks ? JSON.parse(JSON.stringify(pg.blocks)) : [];
+    document.getElementById('pg-title').value = pg.title||'';
+    document.getElementById('pg-slug').value  = pg.slug||slug;
+    document.getElementById('pg-slug-preview').textContent = 'URL: #page/'+(pg.slug||slug);
+    document.getElementById('pg-slug').disabled = true; // can't change slug once created
+    document.getElementById('pg-form-title').textContent = 'EDIT PAGE';
+    document.getElementById('pg-cancel-btn').style.display = 'inline-block';
+    pgRenderBlockList();
+    document.getElementById('pg-form-title').scrollIntoView({behavior:'smooth',block:'start'});
+    showToast('✓ Loaded "'+pg.title+'" for editing');
+  }
+
+  function pgCancelEdit() {
+    pgEditingSlug = null;
+    pgBlocks = [];
+    pgPreviewing = false;
+    document.getElementById('pg-title').value  = '';
+    document.getElementById('pg-slug').value   = '';
+    document.getElementById('pg-slug').disabled = false;
+    document.getElementById('pg-slug-preview').textContent = 'URL: #page/—';
+    document.getElementById('pg-form-title').textContent = 'CREATE NEW PAGE';
+    document.getElementById('pg-cancel-btn').style.display = 'none';
+    document.getElementById('pg-preview-panel').style.display = 'none';
+    document.getElementById('pg-preview-btn').textContent = '👁 Preview';
+    pgRenderBlockList();
+  }
+
+  async function pgDeletePage(slug, title) {
+    if (!confirm('Delete page "'+title+'"? This cannot be undone.')) return;
+    try {
+      await ZyntixDB.deletePage(slug);
+      showToast('✓ Page "'+title+'" deleted');
+      pgLoadAll();
+    } catch(e) { showToast('Delete failed: '+e.message,'error'); }
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  PUBLIC PAGE VIEW — #page/:slug
+  // ══════════════════════════════════════════════════════
+  async function initPageView(slug) {
+    if (!slug) { navigate('home'); return; }
+    const loadEl    = document.getElementById('page-loading');
+    const contentEl = document.getElementById('page-content');
+    const notFound  = document.getElementById('page-notfound');
+    loadEl.style.display    = 'flex';
+    contentEl.style.display = 'none';
+    notFound.style.display  = 'none';
+
+    // Fetch from Firestore
+    let pg = allPages.find(p => p.slug===slug || p.id===slug);
+    if (!pg && window.ZyntixDB) {
+      try {
+        allPages = await ZyntixDB.fetchPages();
+        pg = allPages.find(p => p.slug===slug || p.id===slug);
+      } catch(e) {}
+    }
+
+    loadEl.style.display = 'none';
+
+    if (!pg) {
+      notFound.style.display = 'flex';
+      return;
+    }
+
+    document.getElementById('page-title').textContent = pg.title || '';
+
+    // Updated date
+    let updatedStr = '';
+    if (pg.updatedAt && pg.updatedAt.toDate) {
+      updatedStr = 'Last updated: ' + pg.updatedAt.toDate().toLocaleDateString('en-IN', {year:'numeric',month:'long',day:'numeric'});
+    }
+    document.getElementById('page-updated').textContent = updatedStr;
+
+    // Render blocks
+    document.getElementById('page-blocks').innerHTML = renderRichContent(pg.blocks||[]);
+
+    contentEl.style.display = 'block';
+  }
+  </script>
+</body>
+</html>
